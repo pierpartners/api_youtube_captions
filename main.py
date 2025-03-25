@@ -79,6 +79,46 @@ def upload_captions_to_gcs(captions_text: str, metadata: dict, gcs_bucket_name: 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error uploading captions to GCS: {str(e)}")
 # %%
+@app.get('/teste/')
+async def download_video(url: str):
+    """
+    Downloads the audio stream from the provided YouTube video URL
+    and returns the audio file path (MP4).
+    """
+    print(f'Downloading captions for video: {url}')
+    try:
+        yt = YouTube(url)
+    except Exception as e:
+        print(f'Error downloading video: {str(e)}')
+    # Try to get Portuguese captions first
+    caption = yt.captions.get('a.pt')
+    if not caption:
+        # If no Portuguese captions, try English
+        caption = yt.captions.get('en')
+    
+    # If no captions in Portuguese or English, return a message
+    if not caption:
+        return None, "No captions found"
+    
+    # If captions are found, generate the text
+    captions_text = caption.generate_txt_captions()
+
+    # Prepare metadata
+    metadata = {
+        "title": yt.title,
+        "author": yt.author,
+        "video_id": yt.video_id,
+        "channel_id": yt.channel_id,
+        "publish_date": yt.publish_date.strftime("%Y-%m-%d %H:%M:%S"),
+        "description": yt.description,
+        "keywords": yt.keywords,
+        "url": url,
+    }
+
+    print(f'Captions downloaded for video: {yt.title}. Metadata: {metadata}')
+
+    return captions_text
+
 @app.post("/convert_and_upload/")
 async def convert_and_upload_video(url: str, gs_bucket_name: str):
     """
