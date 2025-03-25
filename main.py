@@ -47,6 +47,8 @@ def download_video(url: str):
             "url": url,
         }
 
+        print(f'Captions downloaded for video: {yt.title}. Metadata: {metadata}')
+
         return captions_text, metadata
 
     except Exception as e:
@@ -57,6 +59,7 @@ def upload_captions_to_gcs(captions_text: str, metadata: dict, gcs_bucket_name: 
     Uploads the captions text to Google Cloud Storage as a .txt file with metadata.
     """
     try:
+        print(f'Uploading captions to GCS for video. Metadata: {metadata}')
         # Create a temporary .txt file with the captions text
         captions_file_path = os.path.join(TEMP_DIR, f"{metadata.get('video_id')}.txt")
         with open(captions_file_path, "w") as captions_file:
@@ -84,6 +87,10 @@ async def convert_and_upload_video(url: str, gs_bucket_name: str):
     try:
         # Download captions (in Portuguese or English)
         captions, metadata = download_video(url)
+
+        # print begining of captions and metadata
+        print(captions[:100])
+        print(metadata)
 
         if captions == "No captions found":
             return {"message": captions}  # Return the caption error message
