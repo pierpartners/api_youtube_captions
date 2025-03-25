@@ -87,7 +87,7 @@ async def download_video(url: str):
     """
     print(f'Downloading captions for video: {url}')
     try:
-        yt = YouTube(url)
+        yt = YouTube(url, client = 'ANDROID')
     except Exception as e:
         print(f'Error downloading video: {str(e)}')
     # Try to get Portuguese captions first
