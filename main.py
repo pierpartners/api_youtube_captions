@@ -91,7 +91,7 @@ async def download_video(url: str):
     for client in list_of_clients:
         try:
             yt = YouTube(url, client = 'ANDROID')
-            print(f'Client: {client}, yt.captions: {yt.captions}')
+            print(f'Client: {client}, yt.captions: {yt.captions}, yt.author: {yt.author}')
             lista.append(f'Client: {client}, yt.captions: {yt.captions}')
         except Exception as e:
             print(f'Error downloading video: {str(e)}')
