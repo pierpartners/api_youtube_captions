@@ -86,38 +86,43 @@ async def download_video(url: str):
     and returns the audio file path (MP4).
     """
     print(f'Downloading captions for video: {url}')
-    try:
-        yt = YouTube(url, client = 'ANDROID')
-    except Exception as e:
-        print(f'Error downloading video: {str(e)}')
-    # Try to get Portuguese captions first
-    caption = yt.captions.get('a.pt')
-    if not caption:
-        # If no Portuguese captions, try English
-        caption = yt.captions.get('en')
-    
-    # If no captions in Portuguese or English, return a message
-    if not caption:
-        return None, "No captions found"
-    
-    # If captions are found, generate the text
-    captions_text = caption.generate_txt_captions()
+    list_of_clients = ['WEB', 'WEB_EMBED', 'WEB_MUSIC', 'WEB_CREATOR', 'WEB_SAFARI', 'ANDROID', 'ANDROID_MUSIC', 'ANDROID_CREATOR', 'ANDROID_VR', 'ANDROID_PRODUCER', 'ANDROID_TESTSUITE', 'IOS', 'IOS_MUSIC', 'IOS_CREATOR', 'MWEB', 'TV', 'TV_EMBED', 'MEDIA_CONNECT']
+    lista = []
+    for client in list_of_clients:
+        try:
+            yt = YouTube(url, client = 'ANDROID')
+            print(f'Client: {client}, yt.captions: {yt.captions}')
+            lista.append(f'Client: {client}, yt.captions: {yt.captions}')
+        except Exception as e:
+            print(f'Error downloading video: {str(e)}')
+        # Try to get Portuguese captions first
+        caption = yt.captions.get('a.pt')
+        if not caption:
+            # If no Portuguese captions, try English
+            caption = yt.captions.get('en')
+        
+        # If no captions in Portuguese or English, return a message
+        if not caption:
+            return None, "No captions found"
+        
+        # If captions are found, generate the text
+        captions_text = caption.generate_txt_captions()
 
-    # Prepare metadata
-    metadata = {
-        "title": yt.title,
-        "author": yt.author,
-        "video_id": yt.video_id,
-        "channel_id": yt.channel_id,
-        "publish_date": yt.publish_date.strftime("%Y-%m-%d %H:%M:%S"),
-        "description": yt.description,
-        "keywords": yt.keywords,
-        "url": url,
-    }
+        # Prepare metadata
+        metadata = {
+            "title": yt.title,
+            "author": yt.author,
+            "video_id": yt.video_id,
+            "channel_id": yt.channel_id,
+            "publish_date": yt.publish_date.strftime("%Y-%m-%d %H:%M:%S"),
+            "description": yt.description,
+            "keywords": yt.keywords,
+            "url": url,
+        }
 
-    print(f'Captions downloaded for video: {yt.title}. Metadata: {metadata}')
+        print(f'Captions downloaded for video: {yt.title}. Metadata: {metadata}')
 
-    return captions_text
+        return lista
 
 @app.post("/convert_and_upload/")
 async def convert_and_upload_video(url: str, gs_bucket_name: str):
