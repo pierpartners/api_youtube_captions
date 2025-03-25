@@ -122,7 +122,7 @@ async def download_video(url: str):
 
         print(f'Captions downloaded for video: {yt.title}. Metadata: {metadata}')
 
-        return lista
+    return lista
 
 @app.post("/convert_and_upload/")
 async def convert_and_upload_video(url: str, gs_bucket_name: str):
