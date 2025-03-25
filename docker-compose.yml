@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  fastapi-app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /app/data-lake-interno-4b42503df173.json  # Pointing to the Google Cloud credentials file
+    volumes:
+      - .:/app
+      - ./data-lake-interno-4b42503df173.json:/app/data-lake-interno-4b42503df173.json  # Make sure to replace this with your actual path
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
