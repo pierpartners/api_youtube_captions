@@ -3,3 +3,4 @@ uvicorn
 pytubefix
 pydub
 google-cloud-storage
+yt-dlp

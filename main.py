@@ -5,6 +5,8 @@ from fastapi import FastAPI, HTTPException
 from pytubefix import YouTube
 from google.cloud import storage
 from io import BytesIO
+import subprocess
+import re
 # %%
 # Initialize FastAPI app
 app = FastAPI()
@@ -54,6 +56,32 @@ def download_video(url: str):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error downloading video: {str(e)}")
 
+def get_video_metadata(url: str):
+    """
+    .
+    """
+    try:
+        yt = YouTube(url)
+        
+        # Prepare metadata
+        metadata = {
+            "title": yt.title,
+            "author": yt.author,
+            "video_id": yt.video_id,
+            "channel_id": yt.channel_id,
+            "publish_date": yt.publish_date.strftime("%Y-%m-%d %H:%M:%S"),
+            "description": yt.description,
+            "keywords": yt.keywords,
+            "url": url,
+        }
+
+        print(f'Captions downloaded for video: {yt.title}. Metadata: {metadata}')
+
+        return metadata
+
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error downloading video metadata: {str(e)}")
+
 def upload_captions_to_gcs(captions_text: str, metadata: dict, gcs_bucket_name: str):
     """
     Uploads the captions text to Google Cloud Storage as a .txt file with metadata.
@@ -78,47 +106,97 @@ def upload_captions_to_gcs(captions_text: str, metadata: dict, gcs_bucket_name: 
     
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error uploading captions to GCS: {str(e)}")
-# %%
-@app.get('/teste/')
-async def download_video(url: str):
-    """
-    Downloads the audio stream from the provided YouTube video URL
-    and returns the audio file path (MP4).
-    """
-    print(f'Downloading captions for video: {url}')
-    list_of_clients = ['WEB', 'WEB_EMBED', 'WEB_MUSIC', 'WEB_CREATOR', 'WEB_SAFARI', 'ANDROID', 'ANDROID_MUSIC', 'ANDROID_CREATOR', 'ANDROID_VR', 'ANDROID_PRODUCER', 'ANDROID_TESTSUITE', 'IOS', 'IOS_MUSIC', 'IOS_CREATOR', 'MWEB', 'TV', 'TV_EMBED', 'MEDIA_CONNECT']
-    lista = []
-    for client in list_of_clients:
-        try:
-            yt = YouTube(url, client = 'ANDROID')
-            print(f'Client: {client}, yt.captions: {yt.captions}, yt.author: {yt.author}')
-            lista.append(f'Client: {client}, yt.captions: {yt.captions}')
-        except Exception as e:
-            print(f'Error downloading video: {str(e)}')
-    return lista
 
-@app.post("/convert_and_upload/")
-async def convert_and_upload_video(url: str, gs_bucket_name: str):
-    """
-    Receives a YouTube video URL, retrieves captions, and uploads them as a .txt file to GCS with metadata.
-    """
+def download_subtitles(url, lang='pt-orig', output_dir='tmp'):
+    # Build the yt-dlp command as a list of arguments
+    command = [
+        'yt-dlp', 
+        '--skip-download', 
+        '--write-auto-subs', 
+        '--write-subs', 
+        '--sub-lang', lang, 
+        '--convert-subs', 'srt', 
+        '--sub-format', 'txt', 
+        '-o', f"{output_dir}/%(id)s.%(ext)s",  # Set the output template
+        url  # The URL of the YouTube video
+    ]
+    
+    # Run the yt-dlp command
     try:
-        # Download captions (in Portuguese or English)
-        captions, metadata = download_video(url)
+        subprocess.run(command, check=True)
+        print(f"Subtitles downloaded successfully to {output_dir}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error downloading subtitles: {e}")
 
-        # print begining of captions and metadata
-        print(captions[:100])
-        print(metadata)
+def clean_subtitles(input_file, output_file):
+    with open(input_file, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
 
-        if captions == "No captions found":
-            return {"message": captions}  # Return the caption error message
+    cleaned_lines = []
+    previous_line = ""
+    
+    # Regular expression to remove timestamps and line numbers
+    timestamp_pattern = re.compile(r'\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}')
+    line_number_pattern = re.compile(r'^\d+$')  # Match line numbers
 
-        # Upload captions .txt file to GCS
-        gcs_url = upload_captions_to_gcs(captions, metadata, gs_bucket_name)
+    for line in lines:
+        # Remove timestamps using regex
+        if timestamp_pattern.match(line.strip()):
+            continue
+        
+        # Remove line numbers (matches lines with only digits)
+        if line_number_pattern.match(line.strip()):
+            continue
+        
+        # Remove empty lines
+        cleaned_line = line.strip()
+        
+        # Skip duplicate lines (ignore case sensitivity and extra spaces)
+        if cleaned_line and cleaned_line.lower() != previous_line.lower():
+            cleaned_lines.append(cleaned_line)
+            previous_line = cleaned_line.lower()  # Save in lowercase to handle case-insensitive duplicates
 
-        return {"message": "File uploaded successfully", "gcs_url": gcs_url}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Write cleaned lines to a .txt file
+    with open(f'{output_file}', 'w', encoding='utf-8') as output:
+        output.write("\n".join(cleaned_lines))
+
+# %%
+@app.get('/convert_and_upload/')
+async def download_video(url: str, gs_bucket_name: str):
+    """
+    Downloads the video from the provided YouTube URL, extracts the subtitles,
+    cleans the subtitles, and uploads the cleaned subtitles to Google Cloud Storage.
+    """
+    print(f"Downloading video from URL: {url}")
+
+    metadata = get_video_metadata(url)
+
+    print("Metadata retrieved successfully")
+    print("Downloading subtitles")
+
+    download_subtitles(url)
+
+    print("Subtitles downloaded successfully")
+    print("Cleaning subtitles")
+
+    clean_subtitles(f"tmp/{metadata.get('video_id')}.pt-orig.srt", f"tmp/{metadata.get('video_id')}.txt")
+
+    print("Subtitles cleaned successfully")
+    print("Uploading subtitles to GCS")
+
+    # Upload the .txt file to GCS
+    with open(f"tmp/{metadata.get('video_id')}.txt", "rb") as captions_file:
+        blob = storage_client.bucket(gs_bucket_name).blob(f"""youtube-captions/{os.path.basename(f"{metadata.get('video_id')}.txt")}""")
+        blob.upload_from_file(captions_file, content_type="text/plain")
+        
+        # Add metadata
+        blob.metadata = metadata
+        blob.patch()
+
+    print("Subtitles uploaded successfully")
+
+    return {"message": f'Dados escritos com sucesso no bucket. Metadata: {metadata}.'}  
+
 
 if __name__ == "__main__":
     import uvicorn
